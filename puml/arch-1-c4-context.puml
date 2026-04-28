@@ -1,0 +1,21 @@
+@startuml
+!include <C4/C4_Context>
+
+title BitHeritage — System Context (C4 Level 1)
+
+Person(alice, "Secret Owner (Alice)", "Holds sensitive secrets")
+Person(bob, "Inheritor (Bob)", "Designated recipient")
+
+System_Boundary(b1, "Systems") {
+    System(bitheritage, "BitHeritage Platform", "Securely stores doubly-encrypted secrets")
+    System_Ext(push, "Push Notification Service", "APNs / FCM")
+}
+
+Rel(alice, bitheritage, "Shares secret")
+Rel(bob, bitheritage, "Requests secret\n sharing")
+Rel(bitheritage, push, "Sends\n notifications")
+Rel(push, alice, "Delivers\n notifications")
+Rel(push, bob, "Delivers\n notifications")
+
+LAYOUT_WITH_LEGEND()
+@enduml

@@ -1,0 +1,26 @@
+@startuml
+left to right direction
+
+rectangle "Client Device" {
+    rectangle "Plaintext Secret" as plain
+    rectangle "ECDHE Key Agreement\n(ephemeral key + Bob's public key)" as ecdhe
+    rectangle "ChaCha20-Poly1305 Encrypt\n(derived key)" as l1enc
+    rectangle "Layer 1 Ciphertext" as l1
+}
+
+rectangle "Encryption Service" {
+    rectangle "ChaCha20-Poly1305 Encrypt\n(server master key)" as l2enc
+    rectangle "Layer 2 Ciphertext" as l2
+}
+
+rectangle "Storage Service" {
+    database "Stored in PostgreSQL" as stored
+}
+
+plain --> ecdhe
+ecdhe --> l1enc
+l1enc --> l1
+l1 --> l2enc : "HTTPS"
+l2enc --> l2
+l2 --> stored
+@enduml

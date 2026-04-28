@@ -1,0 +1,48 @@
+@startuml
+entity "users" as users {
+    * id : uuid <<PK>>
+    --
+    * nickname : varchar <<UK>> "unique, @-prefixed, max 13 chars"
+    webauthn_credentials : jsonb "public key + credential metadata"
+    created_at : timestamp
+}
+
+entity "secrets" as secrets {
+    * id : uuid <<PK>>
+    --
+    * owner_id : uuid <<FK>> "references users(id)"
+    * inheritor_id : uuid <<FK>> "references users(id)"
+    title : varchar "secret name"
+    encrypted_data : text "Layer 2 ciphertext (base64)"
+    secret_type : varchar "text | seed_phrase"
+    metadata : jsonb
+    created_at : timestamp
+}
+
+entity "inheritance_transfers" as inheritance_transfers {
+    * id : uuid <<PK>>
+    --
+    * secret_id : uuid <<FK>> "references secrets(id)"
+    * requester_id : uuid <<FK>> "references users(id)"
+    status : varchar "pending | completed | revoked"
+    grace_period_end : timestamp "calculated: created_at + 180 days"
+    created_at : timestamp
+}
+
+entity "notifications" as notifications {
+    * id : uuid <<PK>>
+    --
+    * user_id : uuid <<FK>> "references users(id)"
+    * transfer_id : uuid <<FK>> "references inheritance_transfers(id)"
+    message : text
+    created_at : timestamp
+}
+
+users ||--o{ secrets : "owns (owner_id)"
+users ||--o{ secrets : "inherits (inheritor_id)"
+secrets ||--o{ inheritance_transfers : "has transfers"
+users ||--o{ inheritance_transfers : "requests (requester_id)"
+inheritance_transfers ||--o{ notifications : "generates"
+users ||--o{ notifications : "receives"
+
+@enduml

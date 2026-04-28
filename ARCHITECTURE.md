@@ -22,29 +22,7 @@
 
 The C4 Level 1 (Context) diagram shows BitHeritage and the external actors that interact with it.
 
-```plantuml
-@startuml
-!include <C4/C4_Context>
-
-title BitHeritage — System Context (C4 Level 1)
-
-Person(alice, "Secret Owner (Alice)", "Holds sensitive secrets")
-Person(bob, "Inheritor (Bob)", "Designated recipient")
-
-System_Boundary(b1, "Systems") {
-    System(bitheritage, "BitHeritage Platform", "Securely stores doubly-encrypted secrets")
-    System_Ext(push, "Push Notification Service", "APNs / FCM")
-}
-
-Rel(alice, bitheritage, "Shares secret")
-Rel(bob, bitheritage, "Requests secret\n sharing")
-Rel(bitheritage, push, "Sends\n notifications")
-Rel(push, alice, "Delivers\n notifications")
-Rel(push, bob, "Delivers\n notifications")
-
-LAYOUT_WITH_LEGEND()
-@enduml
-```
+[![arch-1-c4-context.puml](https://tinyurl.com/247f5dlz)](https://tinyurl.com/247f5dlz)<!--![arch-1-c4-context.puml](puml/arch-1-c4-context.puml)-->
 
 **Actors:**
 
@@ -64,36 +42,8 @@ LAYOUT_WITH_LEGEND()
 
 The C4 Level 2 (Container) diagram shows the major deployable units.
 
-```plantuml
-@startuml
-!include <C4/C4_Container>
+[![arch-2-c4-container.puml](https://tinyurl.com/27kpmacj)](https://tinyurl.com/27kpmacj)<!--![arch-2-c4-container.puml](puml/arch-2-c4-container.puml)-->
 
-title BitHeritage — Container Architecture (C4 Level 2)
-
-Person(user, "User", "Alice or Bob")
-
-System_Boundary(client, "Compatible Device") {
-    Container_Ext(authenticator, "WebAuthn Authenticator", "Platform authenticator", "")
-    Container(app, "BitHeritage Application", "iOS / Android / Browser", "User interface. Client-side encryption, interaction with server-side API.")
-}
-
-System_Boundary(server, "Server Side") {
-    Container(gateway, "Gateway Service", "Rust / Axum", "Public REST API. Handles WebAuthn ceremonies, session management, request routing")
-    Container(encryption, "Encryption Service", "Rust / Axum", "Stateless. Applies server-side encryption (Layer 2) using master key")
-    Container(storage, "Storage Service", "Rust / Axum", "Stateful. CRUD")
-    ContainerDb(db, "PostgreSQL", "Database", "Persists all (encrypted) data")
-}
-
-Rel(user, client, "Biometric / PIN unlock")
-BiRel(authenticator, app, "Passkeys API")
-BiRel(app, gateway, "HTTPS (public endpoint)")
-BiRel(gateway, encryption, "HTTP (internal)")
-BiRel(gateway, storage, "HTTP (internal)")
-BiRel(storage, db, "SQL (internal)")
-
-LAYOUT_WITH_LEGEND()
-@enduml
-```
 
 ### Client Side
 
@@ -154,89 +104,13 @@ _The master key is provisioned via environment variable and never written to dis
 
 ### Double Encryption Flow
 
-```plantuml
-@startuml
-left to right direction
-
-rectangle "Client Device" {
-    rectangle "Plaintext Secret" as plain
-    rectangle "ECDHE Key Agreement\n(ephemeral key + Bob's public key)" as ecdhe
-    rectangle "ChaCha20-Poly1305 Encrypt\n(derived key)" as l1enc
-    rectangle "Layer 1 Ciphertext" as l1
-}
-
-rectangle "Encryption Service" {
-    rectangle "ChaCha20-Poly1305 Encrypt\n(server master key)" as l2enc
-    rectangle "Layer 2 Ciphertext" as l2
-}
-
-rectangle "Storage Service" {
-    database "Stored in PostgreSQL" as stored
-}
-
-plain --> ecdhe
-ecdhe --> l1enc
-l1enc --> l1
-l1 --> l2enc : "HTTPS"
-l2enc --> l2
-l2 --> stored
-@enduml
-```
+[![arch-3-encryption-flow.puml](https://tinyurl.com/26gyoeou)](https://tinyurl.com/26gyoeou)<!--![arch-3-encryption-flow.puml](puml/arch-3-encryption-flow.puml)-->
 
 ---
 
 ## Data Model
 
-```plantuml
-@startuml
-entity "users" as users {
-    * id : uuid <<PK>>
-    --
-    * nickname : varchar <<UK>> "unique, @-prefixed, max 13 chars"
-    webauthn_credentials : jsonb "public key + credential metadata"
-    created_at : timestamp
-}
-
-entity "secrets" as secrets {
-    * id : uuid <<PK>>
-    --
-    * owner_id : uuid <<FK>> "references users(id)"
-    * inheritor_id : uuid <<FK>> "references users(id)"
-    title : varchar "secret name"
-    encrypted_data : text "Layer 2 ciphertext (base64)"
-    secret_type : varchar "text | seed_phrase"
-    metadata : jsonb
-    created_at : timestamp
-}
-
-entity "inheritance_transfers" as inheritance_transfers {
-    * id : uuid <<PK>>
-    --
-    * secret_id : uuid <<FK>> "references secrets(id)"
-    * requester_id : uuid <<FK>> "references users(id)"
-    status : varchar "pending | completed | revoked"
-    grace_period_end : timestamp "calculated: created_at + 180 days"
-    created_at : timestamp
-}
-
-entity "notifications" as notifications {
-    * id : uuid <<PK>>
-    --
-    * user_id : uuid <<FK>> "references users(id)"
-    * transfer_id : uuid <<FK>> "references inheritance_transfers(id)"
-    message : text
-    created_at : timestamp
-}
-
-users ||--o{ secrets : "owns (owner_id)"
-users ||--o{ secrets : "inherits (inheritor_id)"
-secrets ||--o{ inheritance_transfers : "has transfers"
-users ||--o{ inheritance_transfers : "requests (requester_id)"
-inheritance_transfers ||--o{ notifications : "generates"
-users ||--o{ notifications : "receives"
-
-@enduml
-```
+[![arch-4-data-model.puml](https://tinyurl.com/2cumle3d)](https://tinyurl.com/2cumle3d)<!--![arch-4-data-model.puml](puml/arch-4-data-model.puml)-->
 
 **Constraints:**
 
