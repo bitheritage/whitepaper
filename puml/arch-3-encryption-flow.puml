@@ -2,25 +2,38 @@
 left to right direction
 
 rectangle "Client Device" {
+    rectangle "WebAuthn Authenticator\n(PRF Extension)" as prf
+    rectangle "HKDF-SHA256\n(PRF output → X25519 private key)" as keyder
     rectangle "Plaintext Secret" as plain
-    rectangle "ECDHE Key Agreement\n(ephemeral key + Bob's public key)" as ecdhe
-    rectangle "ChaCha20-Poly1305 Encrypt\n(derived key)" as l1enc
-    rectangle "Layer 1 Ciphertext" as l1
+    rectangle "X25519 Key Agreement\n(ephemeral key + Bob's\nencryption public key)" as ecdh
+    rectangle "HKDF-SHA256\n(shared secret → symmetric key)" as hkdf
+    rectangle "XChaCha20-Poly1305 Encrypt\n(derived symmetric key)" as l1enc
+    rectangle "Layer 1 Ciphertext\n(ciphertext + ephemeral\npublic key + nonce)" as l1
 }
 
 rectangle "Encryption Service" {
-    rectangle "ChaCha20-Poly1305 Encrypt\n(server master key)" as l2enc
+    rectangle "HKDF-SHA256\n(master key + secret UUID\n→ per-secret key)" as l2keyder
+    rectangle "ChaCha20-Poly1305 Encrypt\n(per-secret key)" as l2enc
     rectangle "Layer 2 Ciphertext" as l2
+}
+
+rectangle "Secrets Manager" as sm {
+    rectangle "Master Key\n(versioned)" as masterkey
 }
 
 rectangle "Storage Service" {
     database "Stored in PostgreSQL" as stored
 }
 
-plain --> ecdhe
-ecdhe --> l1enc
+prf --> keyder : "32 bytes"
+keyder -[hidden]-> plain
+plain --> ecdh
+ecdh --> hkdf
+hkdf --> l1enc
 l1enc --> l1
-l1 --> l2enc : "HTTPS"
+l1 --> l2keyder : "HTTPS"
+masterkey --> l2keyder : "at startup"
+l2keyder --> l2enc
 l2enc --> l2
 l2 --> stored
 @enduml

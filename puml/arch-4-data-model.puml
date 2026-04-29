@@ -4,6 +4,7 @@ entity "users" as users {
     --
     * nickname : varchar <<UK>> "unique, @-prefixed, max 13 chars"
     webauthn_credentials : jsonb "public key + credential metadata"
+    encryption_public_key : bytea "X25519 public key (32 bytes)"
     created_at : timestamp
 }
 
@@ -14,6 +15,10 @@ entity "secrets" as secrets {
     * inheritor_id : uuid <<FK>> "references users(id)"
     title : varchar "secret name"
     encrypted_data : text "Layer 2 ciphertext (base64)"
+    ephemeral_public_key : bytea "X25519 ephemeral public key (32 bytes)"
+    nonce : bytea "XChaCha20-Poly1305 nonce (24 bytes)"
+    l2_nonce : bytea "ChaCha20-Poly1305 Layer 2 nonce (12 bytes)"
+    l2_key_version : integer "master key version used for Layer 2"
     secret_type : varchar "text | seed_phrase"
     metadata : jsonb
     created_at : timestamp

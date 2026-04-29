@@ -12,10 +12,12 @@ System_Boundary(client, "Compatible Device") {
 
 System_Boundary(server, "Server Side") {
     Container(gateway, "Gateway Service", "Rust / Axum", "Public REST API. Handles WebAuthn ceremonies, session management, request routing")
-    Container(encryption, "Encryption Service", "Rust / Axum", "Stateless. Applies server-side encryption (Layer 2) using master key")
+    Container(encryption, "Encryption Service", "Rust / Axum", "Stateless. Derives per-secret keys via HKDF from master key. Applies Layer 2 encryption")
     Container(storage, "Storage Service", "Rust / Axum", "Stateful. CRUD")
     ContainerDb(db, "PostgreSQL", "Database", "Persists all (encrypted) data")
 }
+
+Container_Ext(secrets_mgr, "Secrets Manager", "Vault / AWS SM / GCP SM", "Stores and provisions the server master encryption key with versioning and audit logging")
 
 Rel(user, client, "Biometric / PIN unlock")
 BiRel(authenticator, app, "Passkeys API")
@@ -23,6 +25,7 @@ BiRel(app, gateway, "HTTPS (public endpoint)")
 BiRel(gateway, encryption, "HTTP (internal)")
 BiRel(gateway, storage, "HTTP (internal)")
 BiRel(storage, db, "SQL (internal)")
+Rel(encryption, secrets_mgr, "Retrieves master key\n(at startup)")
 
 LAYOUT_WITH_LEGEND()
 @enduml

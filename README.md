@@ -74,8 +74,12 @@ doubly encrypted ciphertext that is useless without both the server's master key
 
 ### Defense in Depth
 
-Actually, the Bitheritage app never accesses your private keys even locally. It uses a self-protected Webauthn
-Authenticator [PRF extension](https://w3c.github.io/webauthn/#prf-extension) for encryption operations.
+The BitHeritage app never stores encryption key material on the device. Instead, it uses the WebAuthn
+[PRF extension](https://w3c.github.io/webauthn/#prf-extension) to deterministically derive encryption keys from the
+authenticator's internal secret on every session. The derived key exists only in memory for the duration of the
+cryptographic operation and is never written to disk, local storage, or any persistent medium. Access to the PRF output
+requires biometric or PIN verification through the authenticator, ensuring that encryption keys are protected by the
+same hardware-backed security as authentication.
 
 ### Owner Sovereignty
 
@@ -99,8 +103,11 @@ authentication cannot be replayed from another device.
 
 ### Smart Secure Server Side Architecture
 
-Server side storage service that contains double-encrypted tata and stateless encryption service that holds
-a server side encryption key are physically isolated.
+The server-side storage service that contains doubly-encrypted data and the stateless encryption service are
+physically isolated. The encryption service retrieves its master key from an external **Secrets Manager** at startup and
+holds it exclusively in locked memory.
+A unique per-secret encryption key is derived from the master key for each secret, so that no single key protects more
+than one secret.
 
 ---
 
@@ -114,12 +121,16 @@ _See [Architecture](ARCHITECTURE.md) for more details._
 
 1. User opens the BitHeritage app and chooses a tag name (e.g., `@alice`).
 2. The app initiates a WebAuthn registration ceremony with the device's authenticator (Touch ID, Face ID, Windows Hello,
-   etc.).
+   etc.) and requests the PRF extension.
 3. The authenticator generates a device-bound passkey (ECDSA P-256 keypair).
-4. The public key and credential metadata are sent to the server.
-5. The server stores the tag name and public key credential.
+4. The app evaluates the PRF extension with a fixed domain-separation salt to derive 32 bytes of key material.
+5. The app derives an X25519 encryption keypair from the PRF output using HKDF-SHA256. The private key is held only in
+   memory and never stored.
+6. The WebAuthn public key credential and the X25519 encryption public key are sent to the server.
+7. The server stores the tag name, WebAuthn credential, and encryption public key.
 
-**Zero-knowledge guarantee:** The server learns only the tag name and a public key.
+**Zero-knowledge guarantee:** The server learns only the tag name, an authentication public key, and an encryption
+public key. No private key material ever leaves the device!
 
 ### Authentication
 
@@ -136,13 +147,18 @@ No passwords, no OTPs, no recovery emails.
 Alice wants to share a secret with Bob:
 
 1. Alice selects Bob's tag name as the counterparty.
-2. The app fetches Bob's public key from the server.
-3. **Client-side encryption (Layer 1):** The app performs Elliptic Curve Diffie-Hellman Ephemeral (ECDHE) key agreement
-   using Bob's public key to derive a shared secret, then encrypts the plaintext with an authenticated cipher (
-   ChaCha20-Poly1305).
+2. The app fetches Bob's **encryption public key** (X25519) from the server.
+3. **Client-side encryption (Layer 1):**
+    - The app generates an ephemeral X25519 keypair.
+    - Performs X25519 key agreement between the ephemeral private key and Bob's encryption public key to produce a
+      shared
+      secret.
+    - Derives a symmetric encryption key using HKDF-SHA256 with the shared secret as input, the concatenation of the
+      ephemeral public key and Bob's public key as salt, and a fixed context string as info.
+    - Encrypts the plaintext with XChaCha20-Poly1305 using the derived key and random 24-byte nonce.
 4. The encrypted payload (ciphertext + ephemeral public key + nonce) is sent to the server.
-5. **Server-side encryption (Layer 2):** The encryption service wraps the already-encrypted payload with its own
-   ChaCha20-Poly1305 encryption using the master key.
+5. **Server-side encryption (Layer 2):** The encryption service derives a unique per-secret key from the master key (
+   using HKDF-SHA256 with the secret's UUID as salt) and wraps the already-encrypted payload with ChaCha20-Poly1305.
 6. The doubly encrypted secret is stored in the database.
 
 ### Requesting a Secret (Inheritance Claim)
@@ -157,7 +173,9 @@ Alice wants to share a secret with Bob:
 5. If the grace period expires without denial from Alice:
     - The server decrypts Layer 2 encryption (its own layer).
     - The Layer 1 ciphertext is transmitted to Bob.
-    - Bob's decrypts Layer 1 using his webauthn device with an underlying private key (ECDHE key agreement in reverse).
+    - Bob authenticates with his passkey and the app evaluates the PRF extension to re-derive his X25519 private key.
+    - Bob's app performs X25519 key agreement between his private key and the ephemeral public key to reconstruct the
+      shared secret, derives the same symmetric key via HKDF-SHA256, and decrypts the ciphertext.
     - Bob reads the plaintext secret.
 
 ---
@@ -203,23 +221,25 @@ but practical recommendations will be provided in the future.
 
 ### What the Server Knows
 
-- Tag names and WebAuthn public key credentials.
+- Tag names, WebAuthn public key credentials, and X25519 encryption public keys.
 - Doubly encrypted secret ciphertext.
 - Which users have shared secrets with whom (relationship metadata).
 - Timing of requests and transfers.
 
 ### What the Server Cannot Do
 
-- Decrypt Layer 1 ciphertext (requires recipient's private key) and access any secret's plaintext.
+- Decrypt Layer 1 ciphertext (requires the recipient's X25519 private key) and access any secret's plaintext.
 - Impersonate users.
 - Transfer a secret before the grace period expires (enforced by application logic).
 
 ### Threat Scenarios
 
-- **Database breach** — Double encryption renders exfiltrated data useless without both the master key and recipient's
-  private key.
+- **Database breach** — Double encryption renders exfiltrated data useless. Each secret's Layer 2 is encrypted with a
+  unique per-secret key derived from the master key, so even if the database is fully exfiltrated, the attacker needs
+  both the master key (held only in the Secrets Manager and Encryption Service memory) and each recipient's private key.
 - **Server compromise (full)** — Attacker gains the master key and can remove Layer 2, but Layer 1 still requires each
-  recipient's device-bound private key. No single breach exposes all secrets.
+  recipient's X25519 private key, which is derived from the authenticator's PRF secret and never stored on the server.
+  No single breach exposes all secrets.
 - **Malicious server operator** — Verifiable deployment allows clients to confirm server code matches the open-source
   repository. A malicious operator would need to deploy a modified code, which attestation would detect.
 - **Stolen recipient device** — Attacker must also wait for a grace period or compromise Alice's device to prevent
@@ -278,7 +298,7 @@ Dates: Q3–Q4 2026
 - [ ] Comprehensive test suite (unit, integration, end-to-end)
 - [ ] Security audit by independent third party
 - [ ] Rate limiting, abuse prevention
-- [ ] Key rotation mechanism for server master key
+- [ ] Key rotation mechanism for the server master key (via Secrets Manager versioning)
 - [ ] Device recovery protocol
 
 ### Phase 5: Open Launch
@@ -294,9 +314,9 @@ Dates: Q4 2026
 ## Conclusion
 
 BitHeritage provides a practical solution to the digital inheritance problem. By combining WebAuthn passwordless
-authentication, ECDHE end-to-end encryption, server-side double encryption, and a grace-period safety mechanism, the
-protocol ensures that secrets are accessible only to the intended recipient and only after the owner has had ample
-opportunity to intervene.
+authentication, PRF-derived X25519 end-to-end encryption, server-side double encryption, and a grace-period safety
+mechanism, the protocol ensures that secrets are accessible only to the intended recipient and only after the owner has
+had ample opportunity to intervene.
 
 The open-source, verifiably deployed nature of the system means that trust is grounded in mathematics and transparency
 rather than promises.
