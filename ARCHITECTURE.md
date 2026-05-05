@@ -216,3 +216,20 @@ environment, and workflow definition.
 | **CI/CD**             | GitHub Actions                             | Native integration with GitHub, artifact attestation support.                                                                    |
 | **Secrets management** | HashiCorp Vault / AWS Secrets Manager / GCP Secret Manager | Centralized master key storage with versioning, access control, and audit logging. Eliminates environment variable key provisioning. |
 | **Container runtime** | Docker                                     | Reproducible builds, isolated deployment.                                                                                        |
+
+---
+
+## Open Questions and Improvement Proposals
+
+### Consider Distributed Architecture based on Secret Sharing
+
+Consider implementing a distributed architecture that leverages secret sharing techniques, 
+for example, [SSS](https://en.wikipedia.org/wiki/Shamir%27s_secret_sharing) to enhance security and resilience.
+
+### Consider Encryption Improvements
+
+Context: now Alice should trust the server and can't verify that the Bob's public key is really belongs to Bob.
+I.e. the server acts as a certificate authority.
+
+To solve this problem, consider implementing [Chaum-Pedersen protocol/](https://muens.io/chaum-pedersen-protocol/) go guarantee the encryption consistency.
+
