@@ -33,7 +33,9 @@ self-chosen tag name.
 Millions of people hold digital secrets — cryptocurrency seed phrases, master passwords, encryption keys — that would be
 permanently lost if the holder becomes incapacitated or passes away.
 
-We live in a deeply unstable world. There are a lot of ongoing conflicts around the world have made this reality impossible to ignore: soldiers and civilians alike can lose their lives in a random moment — to a missile strike, a landmine, or a frontline engagement. But the urgency extends far beyond any single conflict.
+We live in a deeply unstable world. There are a lot of ongoing conflicts around the world have made this reality
+impossible to ignore: soldiers and civilians alike can lose their lives in a random moment — to a missile strike, a
+landmine, or a frontline engagement. But the urgency extends far beyond any single conflict.
 
 The question is urgent and personal: **How do I ensure that a designated loved ones like my spouse, my children, my
 family can eventually access what I leave behind? Without exposing them prematurely, without trusting the intermediary
@@ -276,7 +278,7 @@ Dates: Q1–Q2 2026
 Dates: Q2 2026
 
 - [ ] React web application with full WebAuthn integration
-- [ ] React Native / Flutter mobile applications (iOS, Android)
+- [ ] React Native mobile applications (iOS, Android)
 - [ ] Client-side encryption
 - [ ] Push notification delivery
 
